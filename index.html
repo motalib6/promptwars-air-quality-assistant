@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BreatheEasy — Urban Air Quality Assistant</title>
+<style>
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f0f9ff;color:#222}
+header{background:#0369a1;color:#fff;padding:28px 20px;text-align:center}
+header h1{margin:0;font-size:32px}header p{margin:8px 0 0;opacity:.92}
+main{max-width:980px;margin:0 auto;padding:20px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin:16px 0;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+h2{margin-top:0;color:#075985}label{display:block;margin:10px 0 4px;font-weight:600}
+input,textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px}
+button{background:#0369a1;color:#fff;border:0;padding:12px 20px;border-radius:10px;font-size:16px;cursor:pointer;margin-top:14px}
+button.secondary{background:#fff;color:#0369a1;border:1px solid #0369a1}
+.badge{display:inline-block;background:#e0f2fe;color:#075985;padding:4px 10px;border-radius:20px;font-size:13px;margin:2px}
+.aqi-big{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.aqi-num{font-size:64px;font-weight:800;line-height:1;padding:14px 22px;border-radius:16px;color:#fff;min-width:150px;text-align:center}
+.aqi-cat{font-size:22px;font-weight:700}
+.aqi-desc{color:#475569;margin-top:6px}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #eee;text-align:left}
+.sugg{border:1px solid #cbd5e1;border-radius:8px;margin-top:6px;overflow:hidden}
+.sugg div{padding:10px;cursor:pointer;border-bottom:1px solid #eee;background:#fff}
+.sugg div:hover{background:#e0f2fe}
+.sugg div:last-child{border-bottom:0}
+.bars{display:flex;align-items:flex-end;gap:3px;height:120px;padding-top:10px}
+.bars .bar{flex:1;border-radius:4px 4px 0 0;min-height:4px;position:relative}
+.barlabels{display:flex;gap:3px;font-size:10px;color:#64748b}
+.barlabels span{flex:1;text-align:center}
+.verdict{font-size:20px;font-weight:700;padding:12px 16px;border-radius:10px;margin:10px 0}
+li{margin:6px 0}.muted{color:#64748b;font-size:13px}
+footer{text-align:center;color:#888;padding:20px;font-size:13px}
+.error{color:#b91c1c;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+<h1>BreatheEasy</h1>
+<p>Urban Air Quality Assistant — live AQI, pollutants, 24-hour outlook &amp; personalised advice for your city.<br>Real data from Open-Meteo. No sign-up, no API key.</p>
+</header>
+<main>
+
+<div class="card">
+<h2>1. Pick your city</h2>
+<label>City name</label>
+<input id="cityInput" type="text" placeholder="e.g. Delhi, Mumbai, Bhubaneswar…" value="Delhi">
+<div id="suggestions" class="sugg" style="display:none"></div>
+<p>
+<button onclick="searchCity()">Search city</button>
+<button class="secondary" onclick="useMyCity('Bhubaneswar')">Try Bhubaneswar</button>
+</p>
+<p class="muted" id="cityNote">Default city: Delhi. Your last city is remembered in this browser.</p>
+<p><span class="badge">Live AQI</span> <span class="badge">PM2.5 · PM10 · O₃ · NO₂</span> <span class="badge">24-hour outlook</span> <span class="badge">Prompt-driven advice</span></p>
+</div>
+
+<div class="card" id="aqiCard" style="display:none">
+<h2>2. Air quality right now — <span id="cityName"></span></h2>
+<div class="aqi-big">
+<div class="aqi-num" id="aqiNum">–</div>
+<div>
+<div class="aqi-cat" id="aqiCat"></div>
+<div class="aqi-desc" id="aqiDesc"></div>
+</div>
+</div>
+<p class="muted" id="aqiTime"></p>
+<h3>Pollutant breakdown</h3>
+<table><thead><tr><th>Pollutant</th><th>Now</th><th>What it means</th></tr></thead><tbody id="pollutantRows"></tbody></table>
+<h3>Health advice for this level</h3>
+<ul id="healthAdvice"></ul>
+</div>
+
+<div class="card" id="outlookCard" style="display:none">
+<h2>3. Next 24 hours — when is the air best?</h2>
+<div class="bars" id="bars"></div>
+<div class="barlabels" id="barlabels"></div>
+<p id="bestHours"></p>
+<p id="worstHours"></p>
+</div>
+
+<div class="card">
+<h2>4. Ask in your own words (your prompt)</h2>
+<label>Describe your situation</label>
+<textarea id="prompt" rows="3" placeholder="e.g. I have asthma, plan my outdoor run in Delhi today">I have asthma, plan my outdoor run in Delhi today</textarea>
+<p><button onclick="makePlan()">Make my plan →</button>
+<button class="secondary" onclick="examplePrompt()">Try an example</button></p>
+<div id="planOut" style="display:none">
+<div class="verdict" id="verdict"></div>
+<ul id="planList"></ul>
+</div>
+</div>
+
+<div class="card">
+<h2>5. Practical tips</h2>
+<ul>
+<li><b>Mask:</b> when AQI is above 150, wear a well-fitted N95/KN95 mask outdoors. A cloth mask does not block PM2.5.</li>
+<li><b>Best outdoor hours:</b> check the 24-hour outlook above — the cleanest hours are usually late afternoon; early mornings in winter are often the worst in North India.</li>
+<li><b>Indoor air:</b> keep windows closed on bad-air days, run an air purifier with a HEPA filter if you have one, and avoid indoor smoke (agarbatti, mosquito coils, frying without ventilation).</li>
+<li><b>Exercise:</b> on Unhealthy days, move workouts indoors. If you must go out, keep it short and slow, and stop if you feel breathless or your chest feels tight.</li>
+<li><b>Children &amp; elderly:</b> they are affected first — keep their outdoor time short when AQI is above 100, and watch for coughing or wheezing.</li>
+<li><b>Check before you go:</b> AQI changes through the day. Search your city here before stepping out.</li>
+</ul>
+<p class="muted">This advice is general information, not medical advice. If you have a breathing condition, follow your doctor's guidance.</p>
+</div>
+</main>
+<footer>BreatheEasy — built for PromptWars Challenge 06: Urban Air Quality Assistant. Live data from the Open-Meteo Air Quality API (CAMS) and Geocoding API. Advice is generated on-device from your prompt's keywords; no hosted LLM is used and no data leaves your browser.</footer>
+<script>
+const CATS=[
+ {max:50, name:"Good", color:"#22c55e", desc:"Air quality is satisfactory — enjoy the outdoors.",
+  advice:["Great day to be outside — walk, run or cycle freely.","No mask needed.","Good time for outdoor exercise and errands."]},
+ {max:100, name:"Moderate", color:"#eab308", desc:"Acceptable, but sensitive people may feel mild discomfort.",
+  advice:["Fine for most people; keep outdoor time normal.","If you have asthma or allergies, carry your inhaler.","Sensitive groups: reduce very long outdoor exertion."]},
+ {max:150, name:"Unhealthy for Sensitive Groups", color:"#f97316", desc:"Sensitive groups may feel effects. General public is usually fine.",
+  advice:["Children, elderly and people with asthma/heart conditions: cut outdoor time short.","Consider a mask if you are sensitive.","Avoid heavy outdoor exercise; prefer a light walk."]},
+ {max:200, name:"Unhealthy", color:"#ef4444", desc:"Everyone may feel effects; sensitive groups may have serious effects.",
+  advice:["Wear an N95/KN95 mask outdoors.","Avoid outdoor exercise — move workouts indoors.","Keep windows closed; use a purifier if you have one.","Children and elderly should stay indoors as much as possible."]},
+ {max:300, name:"Very Unhealthy", color:"#a855f7", desc:"Health alert — risk of serious effects for everyone.",
+  advice:["Stay indoors as much as possible.","N95 mask is essential if you must go out.","Do not exercise outdoors at all.","Watch for breathlessness, chest tightness or persistent cough — seek care if they appear."]},
+ {max:9999, name:"Hazardous", color:"#7f1d1d", desc:"Emergency conditions — the entire population is likely to be affected.",
+  advice:["Stay indoors. Avoid all outdoor activity.","Seal windows and doors as far as possible; run a purifier.","N95 mask is essential for any outdoor exposure.","Seek medical help promptly for breathing difficulty."]}
+];
+const POLLUTANT_INFO={
+ pm2_5:["PM2.5 — fine particles","The main health risk in Indian cities. WHO 24-h guideline: 15 µg/m³."],
+ pm10:["PM10 — coarse dust","Dust and pollen. WHO 24-h guideline: 45 µg/m³."],
+ ozone:["Ozone (O₃)","Forms in sunlight from traffic fumes; irritates lungs, worst in afternoons."],
+ nitrogen_dioxide:["Nitrogen dioxide (NO₂)","Mainly from vehicles; irritates airways, especially for asthma."]
+};
+let currentData=null, currentCity=null;
+
+function catFor(aqi){ return CATS.find(c=>aqi<=c.max) || CATS[CATS.length-1]; }
+
+async function fetchAQ(lat, lon){
+ const url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+lat+"&longitude="+lon+
+  "&hourly=pm2_5,pm10,us_aqi,ozone,nitrogen_dioxide&current=us_aqi,pm2_5,pm10&timezone=auto&forecast_days=2";
+ const r=await fetch(url);
+ if(!r.ok) throw new Error("Air quality API returned "+r.status);
+ return r.json();
+}
+async function searchCity(){
+ const q=document.getElementById("cityInput").value.trim();
+ if(!q) return;
+ const box=document.getElementById("suggestions");
+ box.style.display="none"; box.innerHTML="";
+ try{
+  const r=await fetch("https://geocoding-api.open-meteo.com/v1/search?name="+encodeURIComponent(q)+"&count=5");
+  const d=await r.json();
+  if(!d.results || !d.results.length){ box.style.display="block"; box.innerHTML="<div>No city found — check the spelling and try again.</div>"; return; }
+  box.style.display="block";
+  box.innerHTML=d.results.map((c,i)=>"<div onclick='pickCity("+i+")'>"+c.name+", "+(c.admin1||"")+" — "+c.country+"</div>").join("");
+  window._cities=d.results;
+ }catch(e){ box.style.display="block"; box.innerHTML="<div class='error'>Could not reach the geocoding service. Check your connection and try again.</div>"; }
+}
+function pickCity(i){
+ const c=window._cities[i];
+ document.getElementById("suggestions").style.display="none";
+ document.getElementById("cityInput").value=c.name;
+ loadCity(c.name+", "+c.country, c.latitude, c.longitude);
+}
+function useMyCity(name){
+ document.getElementById("cityInput").value=name;
+ searchCity();
+ setTimeout(()=>{ if(window._cities && window._cities.length) pickCity(0); }, 1200);
+}
+async function loadCity(label, lat, lon){
+ currentCity={label, lat, lon};
+ localStorage.setItem("breatheEasyCity", JSON.stringify(currentCity));
+ document.getElementById("cityName").textContent=label;
+ document.getElementById("aqiNum").textContent="…";
+ document.getElementById("aqiCard").style.display="block";
+ document.getElementById("aqiCat").textContent="Loading live data…";
+ try{
+  const d=await fetchAQ(lat, lon);
+  currentData=d;
+  renderAQ(d);
+ }catch(e){
+  document.getElementById("aqiCat").textContent="";
+  document.getElementById("aqiDesc").innerHTML="<span class='error'>Could not load live air quality data. Check your connection and try again.</span>";
+ }
+}
+function renderAQ(d){
+ const aqi=d.current.us_aqi;
+ const cat=catFor(aqi);
+ const num=document.getElementById("aqiNum");
+ num.textContent=aqi; num.style.background=cat.color;
+ document.getElementById("aqiCat").textContent=cat.name+" (US AQI "+aqi+")";
+ document.getElementById("aqiDesc").textContent=cat.desc;
+ document.getElementById("aqiTime").textContent="Measured "+d.current.time.replace("T"," ")+" local time · Source: Open-Meteo Air Quality API (CAMS)";
+ const vals={pm2_5:d.current.pm2_5, pm10:d.current.pm10, ozone:d.hourly.ozone[hourIndex(d)], nitrogen_dioxide:d.hourly.nitrogen_dioxide[hourIndex(d)]};
+ document.getElementById("pollutantRows").innerHTML=Object.entries(vals).map(([k,v])=>
+  "<tr><td>"+POLLUTANT_INFO[k][0]+"</td><td><b>"+(v==null?"–":Math.round(v)+" µg/m³")+"</b></td><td>"+POLLUTANT_INFO[k][1]+"</td></tr>").join("");
+ document.getElementById("healthAdvice").innerHTML=cat.advice.map(a=>"<li>"+a+"</li>").join("");
+ renderOutlook(d);
+ document.getElementById("outlookCard").style.display="block";
+ document.getElementById("aqiCard").scrollIntoView({behavior:"smooth"});
+}
+function hourIndex(d){
+ const now=d.current.time.slice(0,13);
+ const i=d.hourly.time.findIndex(t=>t.slice(0,13)===now);
+ return i<0?0:i;
+}
+function renderOutlook(d){
+ const start=hourIndex(d);
+ const hours=[];
+ for(let i=0;i<24 && start+i<d.hourly.time.length;i++){
+  hours.push({t:d.hourly.time[start+i], aqi:d.hourly.us_aqi[start+i]});
+ }
+ const max=Math.max(...hours.map(h=>h.aqi||0),1);
+ document.getElementById("bars").innerHTML=hours.map(h=>{
+  const c=catFor(h.aqi||0);
+  return "<div class='bar' style='height:"+Math.max(4,Math.round((h.aqi||0)/max*100))+"%;background:"+c.color+"' title='"+h.t.slice(11,16)+" · AQI "+(h.aqi??"–")+"'></div>";
+ }).join("");
+ document.getElementById("barlabels").innerHTML=hours.map((h,i)=>"<span>"+(i%3===0?h.t.slice(11,16):"")+"</span>").join("");
+ const sorted=[...hours].sort((a,b)=>(a.aqi||999)-(b.aqi||999));
+ const best=sorted.slice(0,3).map(h=>h.t.slice(11,16)+" (AQI "+h.aqi+")").join(", ");
+ const worst=[...hours].sort((a,b)=>(b.aqi||0)-(a.aqi||0)).slice(0,3).map(h=>h.t.slice(11,16)+" (AQI "+h.aqi+")").join(", ");
+ document.getElementById("bestHours").innerHTML="<b>Cleanest hours:</b> "+best+" — best window for outdoor activity.";
+ document.getElementById("worstHours").innerHTML="<b>Worst hours:</b> "+worst+" — avoid being outdoors then if you can.";
+}
+function makePlan(){
+ const p=(document.getElementById("prompt").value||"").toLowerCase();
+ if(!currentData){ document.getElementById("planOut").style.display="block";
+  document.getElementById("verdict").textContent="Load a city first — search a city above, then ask your question.";
+  document.getElementById("verdict").style.background="#fef3c7";
+  document.getElementById("planList").innerHTML=""; return; }
+ const aqi=currentData.current.us_aqi;
+ const cat=catFor(aqi);
+ const start=hourIndex(currentData);
+ const hours=[];
+ for(let i=0;i<24 && start+i<currentData.hourly.time.length;i++) hours.push({t:currentData.hourly.time[start+i], aqi:currentData.hourly.us_aqi[start+i]});
+ const sorted=[...hours].sort((a,b)=>(a.aqi||999)-(b.aqi||999));
+ const bestWindow=sorted.slice(0,2).map(h=>h.t.slice(11,16)).join(" – ");
+ const plan=[];
+ let verdict, vcolor;
+ const wantsOutdoor=/run|jog|walk|exercise|workout|cycl|bike|play|sport|morning walk/.test(p);
+ const asthma=/asthma|breath|lung|wheez|copd|inhaler/.test(p);
+ const kids=/kid|child|children|baby|school/.test(p);
+ const elderly=/old|elder|senior|parent|grand/.test(p);
+ const pregnant=/pregnan/.test(p);
+ const maskQ=/mask/.test(p);
+ const indoorQ=/indoor|home|room|house/.test(p);
+ const commute=/commut|office|work|travel|drive/.test(p);
+ if(aqi<=100){ verdict="✅ Go ahead — air is "+cat.name.toLowerCase()+" (AQI "+aqi+")"; vcolor="#dcfce7"; }
+ else if(aqi<=150){ verdict="⚠️ Go with care — air is "+cat.name+" (AQI "+aqi+")"; vcolor="#fef9c3"; }
+ else { verdict="⛔ Best to stay in — air is "+cat.name+" (AQI "+aqi+")"; vcolor="#fee2e2"; }
+ if(wantsOutdoor){
+  if(aqi>150) plan.push("Skip the outdoor run/workout today — move it indoors (home workout, treadmill, gym).");
+  else plan.push("Best window for your outdoor activity: around "+bestWindow+" today, when AQI is lowest.");
+  plan.push("Keep it shorter and slower than usual; stop if you feel breathless or your chest feels tight.");
+ }
+ if(asthma){
+  plan.push("Asthma: carry your reliever inhaler, take your preventive dose as prescribed, and avoid the worst hours ("+[...hours].sort((a,b)=>(b.aqi||0)-(a.aqi||0)).slice(0,2).map(h=>h.t.slice(11,16)).join(", ")+").");
+  if(aqi>100) plan.push("With asthma, treat AQI above 100 as a no-outdoor-exercise day.");
+ }
+ if(kids) plan.push("Children: keep outdoor play short while AQI is above 100; school outdoor games are best in the cleanest window ("+bestWindow+").");
+ if(elderly) plan.push("Elderly: limit morning walks today; a short indoor walk or light stretching is safer while AQI is "+aqi+".");
+ if(pregnant) plan.push("Pregnancy: avoid prolonged outdoor exposure at this AQI; keep windows closed and air clean indoors.");
+ if(maskQ) plan.push(aqi>150 ? "Mask: yes — wear a well-fitted N95/KN95 outdoors today. Cloth masks do not block PM2.5." : "Mask: not needed at this AQI, but carry one if you are sensitive.");
+ if(indoorQ) plan.push("Indoor air: keep windows closed, run a HEPA purifier if you have one, and avoid smoke indoors (agarbatti, coils, frying without ventilation).");
+ if(commute) plan.push("Commute: keep car windows up and AC on recirculate; if you ride a two-wheeler, an N95 mask helps at this AQI.");
+ if(!plan.length) plan.push("General plan: the air right now is "+cat.name+" (AQI "+aqi+"). Best outdoor window today is around "+bestWindow+".");
+ plan.push("Check the 24-hour outlook above before you step out — AQI changes through the day.");
+ document.getElementById("planOut").style.display="block";
+ const v=document.getElementById("verdict");
+ v.textContent=verdict; v.style.background=vcolor;
+ document.getElementById("planList").innerHTML=plan.map(x=>"<li>"+x+"</li>").join("");
+ document.getElementById("planOut").scrollIntoView({behavior:"smooth"});
+}
+function examplePrompt(){
+ document.getElementById("prompt").value="I have asthma, plan my outdoor run in Delhi today";
+ makePlan();
+}
+(function init(){
+ let saved=null;
+ try{ saved=JSON.parse(localStorage.getItem("breatheEasyCity")||"null"); }catch(e){}
+ if(saved && saved.lat) loadCity(saved.label, saved.lat, saved.lon);
+ else loadCity("Delhi, India", 28.65195, 77.23149);
+ document.getElementById("cityInput").addEventListener("keydown", e=>{ if(e.key==="Enter") searchCity(); });
+})();
+</script>
+</body>
+</html>
